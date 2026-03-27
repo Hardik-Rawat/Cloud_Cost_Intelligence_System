@@ -1,0 +1,10 @@
+
+venv/
+env/
+
+.env
+credentials.csv
+
+*.csv
+*.sqlite3
+__pycache__/

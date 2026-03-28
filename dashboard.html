@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AWS Cost Intelligence Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    .header {
+      background: linear-gradient(135deg, #1a1f2e, #232b3e);
+      padding: 20px 32px;
+      border-bottom: 1px solid #2d3748;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #63b3ed;
+    }
+    .header .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #68d391;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #68d391;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 20px;
+      padding: 24px;
+    }
+    .card {
+      background: #1a1f2e;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .card h2 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #a0aec0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card.full-width { grid-column: 1 / -1; }
+
+    /* Savings Summary */
+    .savings-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .stat-box {
+      background: #232b3e;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-box .value {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .stat-box .label {
+      font-size: 12px;
+      color: #718096;
+    }
+    .green { color: #68d391; }
+    .blue  { color: #63b3ed; }
+    .yellow{ color: #f6e05e; }
+    .red   { color: #fc8181; }
+
+    /* Anomaly Feed */
+    .anomaly-list { max-height: 320px; overflow-y: auto; }
+    .anomaly-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      background: #232b3e;
+      border-left: 3px solid transparent;
+      font-size: 13px;
+    }
+    .anomaly-item.pending     { border-left-color: #f6e05e; }
+    .anomaly-item.actioned    { border-left-color: #68d391; }
+    .anomaly-item.skipped     { border-left-color: #718096; }
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .badge.pending  { background: #744210; color: #f6e05e; }
+    .badge.actioned { background: #1c4532; color: #68d391; }
+    .badge.skipped  { background: #2d3748; color: #718096; }
+    .badge.cpu_spike      { background: #742a2a; color: #fc8181; }
+    .badge.idle_instance  { background: #1a365d; color: #63b3ed; }
+    .badge.cost_spike     { background: #44337a; color: #d6bcfa; }
+    .badge.runaway_function { background: #7b341e; color: #fbd38d; }
+
+    /* Optimization Log */
+    .log-list { max-height: 320px; overflow-y: auto; }
+    .log-item {
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      background: #232b3e;
+      font-size: 13px;
+    }
+    .log-item .log-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .log-item .action-name {
+      font-weight: 600;
+      color: #63b3ed;
+    }
+    .log-item .saving {
+      color: #68d391;
+      font-weight: 600;
+    }
+    .log-item .resource {
+      color: #a0aec0;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .log-item .rollback {
+      font-size: 11px;
+      color: #718096;
+      font-family: monospace;
+      background: #1a1f2e;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-top: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Chart */
+    .chart-container { position: relative; height: 280px; }
+
+    /* Breakdown bars */
+    .breakdown { margin-top: 12px; }
+    .breakdown-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .breakdown-label { width: 140px; color: #a0aec0; }
+    .breakdown-bar-bg {
+      flex: 1;
+      height: 8px;
+      background: #2d3748;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .breakdown-bar {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #63b3ed, #68d391);
+    }
+    .breakdown-value { width: 60px; text-align: right; color: #e2e8f0; }
+
+    .refresh-note {
+      font-size: 11px;
+      color: #4a5568;
+      text-align: right;
+      margin-top: 8px;
+    }
+    .loading {
+      text-align: center;
+      color: #4a5568;
+      padding: 40px;
+      font-size: 14px;
+    }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #1a1f2e; }
+    ::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 2px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const API = "http://localhost:5000/api";
+
+// ─── Helpers ───────────────────────────────────────────
+function timeAgo(ts) {
+  const diff = (Date.now() - new Date(ts)) / 1000;
+  if (diff < 60)    return `${Math.floor(diff)}s ago`;
+  if (diff < 3600)  return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  return `${Math.floor(diff/86400)}d ago`;
+}
+
+function useFetch(url, interval = 60000) {
+  const [data, setData] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [lastFetched, setLastFetched] = React.useState(null);
+  const [tick, setTick] = React.useState(0);
+
+  const refresh = () => setTick(t => t + 1);
+
+  React.useEffect(() => {
+    setLoading(true);
+    const fetchData = () => {
+      fetch(url)
+        .then(r => r.json())
+        .then(d => {
+          setData(d);
+          setLoading(false);
+          setLastFetched(new Date());
+        })
+        .catch(() => setLoading(false));
+    };
+    fetchData();
+    const id = setInterval(fetchData, interval);
+    return () => clearInterval(id);
+  }, [url, tick]);
+
+  return { data, loading, lastFetched, refresh };
+}
+
+// ─── Panel 1: Cost Trend Chart ────────────────────────
+function CostTrendPanel() {
+  const { data, loading } = useFetch(`${API}/cost-trend`);
+  const canvasRef = React.useRef(null);
+  const chartRef  = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!data || !canvasRef.current) return;
+
+    const colors = ["#63b3ed","#68d391","#f6e05e","#fc8181","#d6bcfa"];
+    const services = Object.keys(data);
+
+    const allTimestamps = [...new Set(
+      services.flatMap(s => data[s].map(p => p.timestamp))
+    )].sort();
+
+    const datasets = services.map((service, i) => {
+      const lookup = {};
+      data[service].forEach(p => { lookup[p.timestamp] = p.cost_usd; });
+      return {
+        label: service.replace("Amazon ", "").replace("AWS ", ""),
+        data: allTimestamps.map(ts => lookup[ts] ?? null),
+        borderColor: colors[i % colors.length],
+        backgroundColor: colors[i % colors.length] + "22",
+        tension: 0.4,
+        spanGaps: true,
+        pointRadius: 3
+      };
+    });
+
+    if (chartRef.current) chartRef.current.destroy();
+
+    chartRef.current = new Chart(canvasRef.current, {
+      type: "line",
+      data: {
+        labels: allTimestamps.map(ts => {
+          const d = new Date(ts);
+          return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:00`;
+        }),
+        datasets
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: "#a0aec0", font: { size: 11 } } }
+        },
+        scales: {
+          x: {
+            ticks: { color: "#718096", maxTicksLimit: 8, font: { size: 10 } },
+            grid: { color: "#2d3748" }
+          },
+          y: {
+            ticks: { color: "#718096", callback: v => `$${v.toFixed(3)}` },
+            grid: { color: "#2d3748" }
+          }
+        }
+      }
+    });
+  }, [data]);
+
+  return (
+    <div className="card">
+      <h2>📈 Cost Trend</h2>
+      {loading
+        ? <div className="loading">Loading cost data...</div>
+        : <div className="chart-container"><canvas ref={canvasRef}/></div>
+      }
+      <div className="refresh-note">Refreshes every 60s</div>
+    </div>
+  );
+}
+
+// ─── Panel 2: Anomaly Feed ────────────────────────────
+function AnomalyFeedPanel() {
+  const { data, loading, lastFetched, refresh } = useFetch(`${API}/anomalies`);
+
+  return (
+    <div className="card">
+      <h2>🚨 Anomaly Feed
+        <span style={{marginLeft:"auto", display:"flex", alignItems:"center", gap:8}}>
+          {data && <span style={{color:"#fc8181", fontSize:12}}>
+            {data.filter(a => a.status === "pending").length} pending
+          </span>}
+          <button onClick={refresh} style={{
+            background:"#2d3748", border:"none", color:"#a0aec0",
+            padding:"3px 10px", borderRadius:6, cursor:"pointer", fontSize:11
+          }}>⟳ Refresh</button>
+        </span>
+      </h2>
+      {lastFetched && <div style={{fontSize:11, color:"#4a5568", marginBottom:8}}>
+        Last fetched: {lastFetched.toLocaleTimeString()}
+      </div>}
+      {loading
+        ? <div className="loading">Loading anomalies...</div>
+        : <div className="anomaly-list">
+            {(!data || data.length === 0)
+              ? <div className="loading">No anomalies detected yet</div>
+              : data.map((a, i) => (
+                <div key={i} className={`anomaly-item ${a.status}`}>
+                  <div>
+                    <span className={`badge ${a.anomaly_type}`}>
+                      {a.anomaly_type.replace(/_/g," ")}
+                    </span>
+                    <span style={{marginLeft:8, color:"#718096", fontSize:11}}>
+                      {a.model} · {timeAgo(a.timestamp)}
+                    </span>
+                  </div>
+                  <div style={{display:"flex", alignItems:"center", gap:8}}>
+                    <span style={{fontSize:11, color:"#a0aec0"}}>
+                      {(a.confidence * 100).toFixed(0)}% conf
+                    </span>
+                    <span className={`badge ${a.status}`}>{a.status}</span>
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+      }
+      <div className="refresh-note">Refreshes every 60s</div>
+    </div>
+  );
+}
+
+// ─── Panel 3: Optimization Log ────────────────────────
+function OptimizationLogPanel() {
+  const { data, loading } = useFetch(`${API}/optimization-log`);
+
+  return (
+    <div className="card">
+      <h2>⚙️ Optimization Log</h2>
+      {loading
+        ? <div className="loading">Loading log...</div>
+        : <div className="log-list">
+            {(!data || data.length === 0)
+              ? <div className="loading">No actions taken yet</div>
+              : data.map((item, i) => (
+                <div key={i} className="log-item">
+                  <div className="log-header">
+                    <span className="action-name">
+                      {item.action_taken.replace(/_/g," ")}
+                    </span>
+                    <span className="saving">
+                      {item.estimated_saving_usd > 0
+                        ? `−$${item.estimated_saving_usd.toFixed(4)}/hr`
+                        : "flagged"}
+                    </span>
+                  </div>
+                  <div className="resource">
+                    {item.resource_type} · {item.resource_id?.substring(0,30)}
+                    {item.resource_id?.length > 30 ? "..." : ""}
+                    · <span className={`badge ${item.status}`}>{item.status}</span>
+                  </div>
+                  <div style={{fontSize:11, color:"#718096"}}>
+                    {item.anomaly_type.replace(/_/g," ")} · {timeAgo(item.timestamp)}
+                  </div>
+                  {item.rollback_command && item.rollback_command !== "none" &&
+                    <div className="rollback">↩ {item.rollback_command}</div>
+                  }
+                </div>
+              ))
+            }
+          </div>
+      }
+      <div className="refresh-note">Refreshes every 60s</div>
+    </div>
+  );
+}
+
+// ─── Panel 4: Savings Summary ────────────────────────
+function SavingsSummaryPanel() {
+  const { data, loading } = useFetch(`${API}/savings-summary`);
+
+  return (
+    <div className="card full-width">
+      <h2>💰 Savings Summary</h2>
+      {loading
+        ? <div className="loading">Loading summary...</div>
+        : !data ? <div className="loading">No data</div>
+        : <>
+            <div className="savings-grid">
+              <div className="stat-box">
+                <div className="value green">${data.total_saving_usd?.toFixed(4)}</div>
+                <div className="label">Saved this run ($/hr)</div>
+              </div>
+              <div className="stat-box">
+                <div className="value blue">${data.total_saving_daily?.toFixed(3)}</div>
+                <div className="label">Projected daily saving</div>
+              </div>
+              <div className="stat-box">
+                <div className="value yellow">${data.total_saving_monthly?.toFixed(2)}</div>
+                <div className="label">Projected monthly saving</div>
+              </div>
+              <div className="stat-box">
+                <div className="value"
+                  style={{color: data.actions_taken > 0 ? "#68d391" : "#718096"}}>
+                  {data.actions_taken}
+                </div>
+                <div className="label">
+                  Actions taken · {data.actions_skipped} skipped · {data.actions_failed} failed
+                </div>
+              </div>
+            </div>
+
+            <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:24}}>
+              <div>
+                <div style={{fontSize:12, color:"#718096", marginBottom:8}}>
+                  SAVINGS BY RESOURCE TYPE
+                </div>
+                <div className="breakdown">
+                  {Object.entries(data.savings_by_type || {}).map(([k,v],i) => {
+                    const max = Math.max(...Object.values(data.savings_by_type));
+                    return (
+                      <div key={i} className="breakdown-row">
+                        <div className="breakdown-label">{k}</div>
+                        <div className="breakdown-bar-bg">
+                          <div className="breakdown-bar"
+                            style={{width: max > 0 ? `${(v/max)*100}%` : "0%"}}/>
+                        </div>
+                        <div className="breakdown-value">${v.toFixed(4)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <div style={{fontSize:12, color:"#718096", marginBottom:8}}>
+                  ANOMALIES BY TYPE
+                </div>
+                <div className="breakdown">
+                  {Object.entries(data.anomalies_by_type || {}).map(([k,v],i) => {
+                    const max = Math.max(...Object.values(data.anomalies_by_type));
+                    return (
+                      <div key={i} className="breakdown-row">
+                        <div className="breakdown-label">{k.replace(/_/g," ")}</div>
+                        <div className="breakdown-bar-bg">
+                          <div className="breakdown-bar"
+                            style={{width: `${(v/max)*100}%`,
+                              background:"linear-gradient(90deg,#fc8181,#f6e05e)"}}/>
+                        </div>
+                        <div className="breakdown-value">{v}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </>
+      }
+      <div className="refresh-note">Refreshes every 60s</div>
+    </div>
+  );
+}
+
+// ─── App Root ─────────────────────────────────────────
+function App() {
+  const [lastUpdate, setLastUpdate] = React.useState(new Date());
+
+  React.useEffect(() => {
+    const id = setInterval(() => setLastUpdate(new Date()), 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <>
+      <div className="header">
+        <div>
+          <h1>☁️ AWS Cost Intelligence System</h1>
+          <div style={{fontSize:12, color:"#4a5568", marginTop:4}}>
+            ML-powered anomaly detection · Autonomous optimization
+          </div>
+        </div>
+        <div className="status">
+          <div className="dot"/>
+          Live · Last updated {timeAgo(lastUpdate)}
+        </div>
+      </div>
+      <div className="grid">
+        <CostTrendPanel />
+        <AnomalyFeedPanel />
+        <OptimizationLogPanel />
+        <SavingsSummaryPanel />
+      </div>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

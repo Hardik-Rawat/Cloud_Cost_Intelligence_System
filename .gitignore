@@ -1,10 +1,55 @@
-
-venv/
-env/
-
-.env
-credentials.csv
-
-*.csv
-*.sqlite3
+# ─── Python ───────────────────────────────────────
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# ─── Virtual Environment ──────────────────────────
+venv/
+.venv/
+env/
+.env.local
+
+# ─── Environment & Secrets ────────────────────────
+# NEVER commit your AWS keys or secrets
+.env
+*.env
+.env.*
+
+# ─── AWS ──────────────────────────────────────────
+.aws/
+aws-exports.js
+
+# ─── Test Artifacts ───────────────────────────────
+test_report.html
+.pytest_cache/
+pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# ─── IDE / Editor ─────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Jupyter ──────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ─── Prophet / Stan build artifacts ───────────────
+prophet_cache/
+cmdstan/
+*.stan
